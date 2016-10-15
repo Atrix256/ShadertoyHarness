@@ -3,8 +3,6 @@
 #include <assert.h>
 #include <cmath>
 
-#define in // nothing to do for in
-
 //-------------------------------------------------------------------------------------
 template <size_t NumElements>
 struct vecN
@@ -106,11 +104,18 @@ struct vec4 : public vecN<4>
 
 	vec4(vec3 v3, float f)
 	{
-		float fz = v3[0];
 		x = v3[0];
 		y = v3[1];
 		z = v3[2];
 		w = f;
+	}
+
+	vec4(vec2 v2, float f1, float f2)
+	{
+		x = v2[0];
+		y = v2[1];
+		z = f1;
+		w = f2;
 	}
 
 	vec4(float v = 0.0f)
@@ -371,7 +376,7 @@ inline vec3 cross (const vec3& a, const vec3& b)
 
 //-------------------------------------------------------------------------------------
 extern float iGlobalTime;
-extern vec2 iResolution;
+extern vec3 iResolution;
 extern vec4 iMouse;
 
-extern void mainImage(vec4& fragColor, in vec2 fragCoord);
+extern void mainImage(vec4& fragColor, vec2 fragCoord);

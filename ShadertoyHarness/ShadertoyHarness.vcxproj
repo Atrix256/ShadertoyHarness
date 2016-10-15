@@ -148,9 +148,12 @@
   <ItemGroup>
     <ClCompile Include="glslAdapters.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="SImageData.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="glslAdapters.h" />
+    <ClInclude Include="Settings.h" />
+    <ClInclude Include="SImageData.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

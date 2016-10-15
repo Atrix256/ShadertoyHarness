@@ -3,8 +3,11 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="glslAdapters.cpp" />
+    <ClCompile Include="SImageData.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="glslAdapters.h" />
+    <ClInclude Include="Settings.h" />
+    <ClInclude Include="SImageData.h" />
   </ItemGroup>
 </Project>
