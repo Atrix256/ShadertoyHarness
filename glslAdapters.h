@@ -3,98 +3,92 @@
 #include <assert.h>
 #include <cmath>
 
-//-------------------------------------------------------------------------------------
-template <size_t NumElements>
-struct vecN
+struct vec2
 {
-	static const size_t c_numElements = NumElements;
-	virtual float& operator[] (size_t i) = 0;
-	virtual float operator[] (size_t i) const = 0;
-
-	vecN<NumElements>* GetBasePointer() { return this; }
-};
-
-//-------------------------------------------------------------------------------------
-struct vec2 : public vecN<2>
-{
-	vec2(float _x, float _y)
-		: x(_x)
-		, y(_y)
-	{ }
-
 	vec2(float v = 0.0f)
 	{
 		for (size_t i = 0; i < c_numElements; ++i)
 			(*this)[i] = v;
 	}
+	vec2(float _x, float _y)
+		: x(_x)
+		, y(_y)
+	{ }
 
-	float x;
-	float y;
+	float x, y;
 
-	virtual float& operator[] (size_t i)
-	{
-		assert(i < c_numElements);
-		switch (i)
-		{
-			case 0: return x;
-			case 1: return y;
-		}
-		assert(false);
-		return x;
-	}
+	static const size_t c_numElements = 2;
 
-	virtual float operator[] (size_t i) const
-	{
-		return (*const_cast<vec2*>(this))[i];
-	}
+	float& operator[] (size_t i) { return (&x)[i]; }
+	float operator[] (size_t i) const { return (&x)[i]; }
+
+	// xy
+	__declspec(property(get = get_xy, put = put_xy)) vec2 xy;
+	inline vec2 get_xy() const { return{ x, y }; }
+	inline void put_xy(vec2 v) { *this = v.xy; }
+	// yx
+	__declspec(property(get = get_yx, put = put_yx)) vec2 yx;
+	inline vec2 get_yx() const { return{ y, x }; }
+	inline void put_yx(vec2 v) { *this = v.yx; }
 };
 
-//-------------------------------------------------------------------------------------
-struct vec3 : public vecN<3>
+struct vec3
 {
+	vec3(float v = 0.0f)
+	{
+		for (size_t i = 0; i < c_numElements; ++i)
+			(*this)[i] = v;
+	}
 	vec3(float _x, float _y, float _z)
 		: x(_x)
 		, y(_y)
 		, z(_z)
 	{ }
 
-	vec3(float v = 0.0f)
+	float x, y, z;
+
+	static const size_t c_numElements = 3;
+
+	float& operator[] (size_t i) { return (&x)[i]; }
+	float operator[] (size_t i) const { return (&x)[i]; }
+
+	// xy
+	__declspec(property(get = get_xy, put = put_xy)) vec2 xy;
+	inline vec2 get_xy() const { return{ x, y }; }
+	inline void put_xy(vec2 v) { this->x = v.x;  this->y = v.y; }
+	// yx
+	__declspec(property(get = get_yx, put = put_yx)) vec2 yx;
+	inline vec2 get_yx() const { return{ y, x }; }
+	inline void put_yx(vec2 v) { this->y = v.x;  this->x = v.y; }
+	// xz
+	__declspec(property(get = get_xz, put = put_xz)) vec2 xz;
+	inline vec2 get_xz() const { return{ x, z }; }
+	inline void put_xz(vec2 v) { this->x = v.x;  this->z = v.y; }
+	// zx
+	__declspec(property(get = get_zx, put = put_zx)) vec2 zx;
+	inline vec2 get_zx() const { return{ z, x }; }
+	inline void put_zx(vec2 v) { this->z = v.x;  this->x = v.y; }
+};
+
+struct vec4
+{
+	vec4(float v = 0.0f)
 	{
 		for (size_t i = 0; i < c_numElements; ++i)
 			(*this)[i] = v;
 	}
-
-	float x;
-	float y;
-	float z;
-
-	virtual float& operator[] (size_t i)
-	{
-		assert(i < c_numElements);
-		switch (i)
-		{
-			case 0: return x;
-			case 1: return y;
-			case 2: return z;
-		}
-		assert(false);
-		return x;
-	}
-
-	virtual float operator[] (size_t i) const
-	{
-		return (*const_cast<vec3*>(this))[i];
-	}
-
-	vec2 xy()
-	{
-		return vec2(x,y);
-	}
-};
-
-//-------------------------------------------------------------------------------------
-struct vec4 : public vecN<4>
-{
+	vec4(const vec2& v2, float _z, float _w)
+		: x(v2.x)
+		, y(v2.y)
+		, z(_z)
+		, w(_w)
+	{ }
+	vec4(const vec3& v3, float _w)
+		: x(v3.x)
+		, y(v3.y)
+		, z(v3.z)
+		, w(w)
+	{ }
 	vec4(float _x, float _y, float _z, float _w)
 		: x(_x)
 		, y(_y)
@@ -102,79 +96,25 @@ struct vec4 : public vecN<4>
 		, w(_w)
 	{ }
 
-	vec4(vec3 v3, float f)
-	{
-		x = v3[0];
-		y = v3[1];
-		z = v3[2];
-		w = f;
-	}
+	float x, y, z, w;
 
-	vec4(vec2 v2, float f1, float f2)
-	{
-		x = v2[0];
-		y = v2[1];
-		z = f1;
-		w = f2;
-	}
+	static const size_t c_numElements = 4;
 
-	vec4(float v = 0.0f)
-	{
-		for (size_t i = 0; i < c_numElements; ++i)
-			(*this)[i] = v;
-	}
+	float& operator[] (size_t i) { return (&x)[i]; }
+	float operator[] (size_t i) const { return (&x)[i]; }
 
-	float x;
-	float y;
-	float z;
-	float w;
-
-	virtual float& operator[] (size_t i)
-	{
-		assert(i < c_numElements);
-		switch (i)
-		{
-			case 0: return x;
-			case 1: return y;
-			case 2: return z;
-			case 3: return w;
-		}
-		assert(false);
-		return x;
-	}
-
-	virtual float operator[] (size_t i) const
-	{
-		return (*const_cast<vec4*>(this))[i];
-	}
-
-	vec2 xy()
-	{
-		return vec2(x, y);
-	}
+	// xy
+	__declspec(property(get = get_xy, put = put_xy)) vec2 xy;
+	inline vec2 get_xy() const { return{ x, y }; }
+	inline void put_xy(vec2 v) { this->x = v.x;  this->y = v.y; }
 };
 
 //-------------------------------------------------------------------------------------
-template<typename T>
-T operator - (const T& A, const T& B)
-{
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
-	// Do the operation
-	T ret;
-	for (size_t i = 0; i < T::c_numElements; ++i)
-		ret[i] = A[i] - B[i];
-	return ret;
-}
-
+// Vec vs Vec operations
 //-------------------------------------------------------------------------------------
 template<typename T>
 T operator + (const T& A, const T& B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -184,39 +124,29 @@ T operator + (const T& A, const T& B)
 
 //-------------------------------------------------------------------------------------
 template<typename T>
-T operator / (const T& A, const T& B)
+T operator - (const T& A, const T& B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
-		ret[i] = A[i] / B[i];
+		ret[i] = A[i] - B[i];
 	return ret;
 }
 
 //-------------------------------------------------------------------------------------
 template<typename T>
-T operator / (const T& A, float B)
+T operator -= (T& A, const T& B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
-	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
-		ret[i] = A[i] / B;
-	return ret;
+		A[i] -= B[i];
+	return A;
 }
 
 //-------------------------------------------------------------------------------------
 template<typename T>
 T operator * (const T& A, const T& B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -226,11 +156,21 @@ T operator * (const T& A, const T& B)
 
 //-------------------------------------------------------------------------------------
 template<typename T>
+T operator / (const T& A, const T& B)
+{
+	// Do the operation
+	T ret;
+	for (size_t i = 0; i < T::c_numElements; ++i)
+		ret[i] = A[i] / B[i];
+	return ret;
+}
+
+//-------------------------------------------------------------------------------------
+// Vec vs Float operations
+//-------------------------------------------------------------------------------------
+template<typename T>
 T operator + (const T& A, float B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -242,9 +182,6 @@ T operator + (const T& A, float B)
 template<typename T>
 T operator - (const T& A, float B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -256,9 +193,6 @@ T operator - (const T& A, float B)
 template<typename T>
 T operator * (const T& A, float B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -268,11 +202,31 @@ T operator * (const T& A, float B)
 
 //-------------------------------------------------------------------------------------
 template<typename T>
+T operator *= (T& A, float B)
+{
+	// Do the operation
+	for (size_t i = 0; i < T::c_numElements; ++i)
+		A[i] *= B;
+	return A;
+}
+
+//-------------------------------------------------------------------------------------
+template<typename T>
+T operator / (const T& A, float B)
+{
+	// Do the operation
+	T ret;
+	for (size_t i = 0; i < T::c_numElements; ++i)
+		ret[i] = A[i] / B;
+	return ret;
+}
+
+//-------------------------------------------------------------------------------------
+// Functions
+//-------------------------------------------------------------------------------------
+template<typename T>
 float dot (const T& A, const T& B)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	float ret = 0.0;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -284,9 +238,6 @@ float dot (const T& A, const T& B)
 template<typename T>
 float length(const T& V)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &V;
-
 	// Do the operation
 	float length = 0.0;
 	for (size_t i = 0; i < T::c_numElements; ++i)
@@ -299,9 +250,6 @@ float length(const T& V)
 template<typename T>
 T normalize(const T& V)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &V;
-
 	// Do the operation
 	return V / length(V);
 }
@@ -310,9 +258,6 @@ T normalize(const T& V)
 template<typename T>
 T fract(const T& A)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	return mod(A, 1.0f);
 }
@@ -321,9 +266,6 @@ T fract(const T& A)
 template<typename T>
 T mod (const T& A, float modulus)
 {
-	// Make sure T is a derivation of vecN
-	const vecN<T::c_numElements>* vec = &A;
-
 	// Do the operation
 	T ret(0.0f);
 	for (size_t i = 0; i < T::c_numElements; ++i)
