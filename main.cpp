@@ -1,5 +1,7 @@
 #include "glslAdapters.h"
 
+#define in 
+
 #define DARKEN_OVER_DISTANCE 1  // This makes it easier to see the different layers in a static image, not to hide a max distance.
 #define SHOW_2d_SHAPE        1  // This makes the 2d shape be shown in upper left corner
 
@@ -7,12 +9,20 @@ const float c_cameraDistance	= 6.0;
 const float c_cameraViewWidth	= 24.0;
 
 //============================================================
+float binarySign (float v)
+{
+    return step(0.0, v) * 2.0 - 1.0;
+}
+
+//============================================================
 // returns t
 // circle xy = position, z = radius
 // adapted from http://mathworld.wolfram.com/Circle-LineIntersection.html
-float RayIntersectCircle (vec2 rayPos, vec2 rayDir, vec3 circle)
+float RayIntersectCircle (in vec2 rayPos, in vec2 rayDir, in vec3 circle)
 {
-    // TODO: clean this up after it's working.
+    // TODO: clean this up. It's not very efficient, but it does work.
+    rayPos = rayPos - circle.xy();
+    
     float x1 = rayPos.x;
     float y1 = rayPos.y;
     float x2 = rayPos.x + rayDir.x;
@@ -30,38 +40,27 @@ float RayIntersectCircle (vec2 rayPos, vec2 rayDir, vec3 circle)
     if (discr < 0.0)
         return 2.0;
     
+    float x = (D*dy - binarySign(dy)*dx*sqrt(discr)) / (d_r*d_r);
+    float y = (-D*dx - abs(dy)*sqrt(discr)) / (d_r*d_r);
     
-    return 0.0;
-    /*
-	//get the vector from the center of this circle to where the ray begins.
-	vec2 m = rayPos - circle.xy;
-
-    //get the dot product of the above vector and the ray's vector
-	float b = dot(m, rayDir);
-
-	float c = dot(m, m) - circle.z * circle.z;
-
-	//exit if r's origin outside s (c > 0) and r pointing away from s (b > 0)
-	if(c > 0.0 && b > 0.0)
-		return -1.0;
-
-	//calculate discriminant
-	float discr = b * b - c;
-
-	//a negative discriminant corresponds to ray missing sphere
-	if(discr < 0.0)
-		return -1.0;
-
-	//ray now found to intersect sphere, compute smallest t value of intersection
-    // NOTE: this will report a miss if ray starts inside the sphere.
-	float collisionTime = -b - sqrt(discr);
+    float t;
+    if (abs(rayDir.x) > 0.1)
+        t = (vec2(x,y) - rayPos).x / rayDir.x;
+    else
+        t = (vec2(x,y) - rayPos).y / rayDir.y;
     
-    if (collisionTime < 0.0)
-        collisionTime = -b + sqrt(discr);
-        
+    if (t < 0.0)
+    {
+        x = (D*dy + binarySign(dy)*dx*sqrt(discr)) / (d_r*d_r);
+        y = (-D*dx + abs(dy)*sqrt(discr)) / (d_r*d_r);
+
+        if (abs(rayDir.x) > 0.1)
+            t = (vec2(x,y) - rayPos).x / rayDir.x;
+        else
+            t = (vec2(x,y) - rayPos).y / rayDir.y;        
+    }
     
-    return collisionTime;
-    */
+    return t;
 }
 
 //============================================================
@@ -180,12 +179,6 @@ float NumberStepsFunction_Circle (vec2 current, vec2 stepValue)
     
     float steps = RayIntersectCircle(current, stepValue, vec3(0.5, 0.5, 0.25));
     return ceil(steps);
-    
-    
-    // TODO: this! line vs circle from inside
-    //vec2 rel = current - vec2(0.5, 0.5);
-    //float dist = length(rel);
-    return 1.0;
 }
 
 //============================================================
@@ -217,13 +210,24 @@ float NumberStepsFunction_ThinSquare (vec2 current, vec2 stepValue)
 }
     
 //============================================================
-void mainImage( vec4& fragColor, vec2 fragCoord )
+void mainImage( vec4& fragColor, in vec2 fragCoord )
 {
+	// TODO: temp!
+	{
+		vec2 percent = (fragCoord / iResolution.xy());
+		if (percent.y > 5.25f / 8.0f && percent.y < 5.75f / 8.0f &&
+			percent.x > 5.25f / 16.0f && percent.x < 5.75f / 16.0f)
+		{
+			int ijkl = 0;
+			//fragColor = vec4(0.0f, 0.0f, 1.0f, 0.0);
+			//return;
+		}
+	}
     
     float mode = mod(iGlobalTime / 3.0f, 5.0f);
     
     // TODO: temp!
-    mode = 3.0;
+    mode = 1.0;
     
     #if SHOW_2d_SHAPE
     {
@@ -269,7 +273,7 @@ void mainImage( vec4& fragColor, vec2 fragCoord )
 
         if (iMouse.z > 0.0) {
             vec2 mouse = iMouse.xy() / iResolution.xy();
-            angleX = 3.14 + 6.28 * -mouse.x;
+            angleX = 3.14 + 6.28 * mouse.x;
             angleY = (mouse.y - 0.5) * 3.14;//(mouse.y * 3.90) - 0.4;
         }
 
@@ -312,13 +316,13 @@ void mainImage( vec4& fragColor, vec2 fragCoord )
     if (mode < 1.0)
     	steps = NumberStepsFunction_L(intersection1.xy(), uvStep);
     else if (mode < 2.0)
-        steps = NumberStepsFunction_Checker(intersection1.xy(), uvStep);    
+        steps = NumberStepsFunction_Checker(intersection1.xy(), uvStep);
     else if (mode < 3.0)
         steps = NumberStepsFunction_Square(intersection1.xy(), uvStep);
     else if (mode < 4.0)
-        steps = NumberStepsFunction_Circle(intersection1.xy(), uvStep);      
+        steps = NumberStepsFunction_Circle(intersection1.xy(), uvStep);
     else if (mode < 5.0)
-        steps = NumberStepsFunction_ThinSquare(intersection1.xy(), uvStep);        
+        steps = NumberStepsFunction_ThinSquare(intersection1.xy(), uvStep);
         
     // calculate how far it is to the intersection we found
     float dist = (1.0 - cameraPos.z) / rayDir.z + steps / rayDir.z;
@@ -341,7 +345,8 @@ void mainImage( vec4& fragColor, vec2 fragCoord )
     vec2 uv = hitPoint.xy();
     
     // sample the texture
-	fragColor = vec4(uv*tint, 0.0, 1.0);    
+	//fragColor = vec4(texture2D(iChannel0, uv).rgb * tint, 1.0);    
+    fragColor = vec4(uv * tint, 0.0, 1.0);   
 }
 
 /*
@@ -399,4 +404,3 @@ Next:
 ? should we do reflection / refraction
 
 */
-

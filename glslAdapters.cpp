@@ -24,7 +24,7 @@ int main(int agrc, char** argv)
 	for (size_t y = 0; y < c_imageResolution[1]; ++y)
 	{
 		uint8* pixelRow = &outImage.m_pixels[y * outImage.m_pitch];
-		for (size_t x = 0; x < c_imageResolution[1]; ++x)
+		for (size_t x = 0; x < c_imageResolution[0]; ++x)
 		{
 			mainImage(fragColor, vec2(x,y));
 
