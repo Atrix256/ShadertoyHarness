@@ -1,54 +1,20 @@
 #include "glslAdapters.h"
 
-
+#define in 
 /*
     By Alan Wolfe
     http://blog.demofox.org
 
-    A remake and extension of sebbi's shader to understand the ideas better. (https://twitter.com/SebAaltonen)
+	Analytical solve for ray vs infinite layers of infinite concentric circles.
+
+	Continuation of:
+    https://www.shadertoy.com/view/MlK3zt
+    and sebbi's:
     https://www.shadertoy.com/view/lly3Rc
 
-    This shader ray traces infinite layers of infinite grids of shapes.  It's raytracing not ray marching
-    which means it is a constant time operation and analytically solves for the intersection point.
-
-    The shapes are:
-    1) L
-    2) square
-    3) circle
-    4) checkerboard
-    5) thin square
-
-    The idea is that you can reduce the problem from 3d to 2d by seeing where the ray hits the first two planes
-    and then using the uv coordinates of those intersections as two points defining a 2d ray.  You then do a
-    2d raytrace of that ray versus a shape, but valid intersection distances are a multiple of the vector's length
-    instead of a continuous calculation.
-
-    For this to work, you need to be able to analystically solve 2d ray vs 2d infinitely repeating shape.
-
-    An way to solve this is to make sure the shape is constrained to a single tile, and when laying the shape on
-    a grid, that no border between "open spaces" is less than 0.5 units.
-
-    The reason for that is because the vector can at most move by 0.5 units on any single axis (since we modulus the vector).
-    
-    If we have a border that is less than 0.5, we will think we got a hit, when in fact it might be a miss, if the sample point
-    is not actually inside the solid point!
-
-    The last two shapes are fail cases.
-
-    The checkerboard is a problem because if the ray is moving up and to the right or down and to the left, it can encounter
-    border thickness less than 0.5.
-
-    The thin square is a problem because it has a very thin border, which is less than 0.5 in all directions!
-
-    The ultimate goal of this stuff is to try and figure out how to make infinitely repeating shapes in ray tracing, like
-    can be done in ray marching via modulus!
-    http://computergraphics.stackexchange.com/questions/4094/is-there-a-method-to-do-ray-marching-style-modulus-repeat-with-raytracing
-
-    Blog post coming before too long.
 */
 
 #define DARKEN_OVER_DISTANCE 1  // This makes it easier to see the different layers in a static image, not to hide a max distance.
-#define SHOW_2d_SHAPE        1  // This makes the 2d shape be shown in upper left corner
 
 const float c_cameraDistance	= 6.0;
 const float c_cameraViewWidth	= 24.0;
@@ -64,7 +30,7 @@ float binarySign (float v)
 // circle xy = position, z = radius
 // adapted from http://mathworld.wolfram.com/Circle-LineIntersection.html
 // Could be done more efficiently, but it works :P
-float RayIntersectCircle (vec2 rayPos, vec2 rayDir, vec3 circle)
+float RayIntersectCircle (in vec2 rayPos, in vec2 rayDir, in vec3 circle)
 {
     rayPos -= circle.xy;
     
@@ -109,193 +75,73 @@ float RayIntersectCircle (vec2 rayPos, vec2 rayDir, vec3 circle)
 }
 
 //============================================================
-float NumberStepsFunction_L_OneAxis (float current, float stepValue)
-{
-    float steps;
-    if (stepValue < 0.0)
-        steps = (current - 0.5) / -stepValue;
-    else
-        steps = (1.0 - current) / stepValue;
-    return steps;
-}
-
-//============================================================
-bool BooleanFunction_L (vec2 current)
-{
-    return (current.x < 0.5 || current.y < 0.5);
-}
-
-//============================================================
-float NumberStepsFunction_L (vec2 current, vec2 stepValue)
-{
-    if (BooleanFunction_L(current))
-        return 0.0;
-    
-    float stepsX = NumberStepsFunction_L_OneAxis(current.x, stepValue.x);
-    float stepsY = NumberStepsFunction_L_OneAxis(current.y, stepValue.y);
-    return ceil(min(stepsX, stepsY));
-}
-
-//============================================================
-bool BooleanFunction_Checker (vec2 current)
-{
-    if (current.x >= 0.5)
-    {
-        return current.y < 0.5;
-    }
-    else
-    {
-        return current.y >= 0.5;
-    }
-}
-
-//============================================================
-float NumberStepsFunction_Checker (vec2 current, vec2 stepValue)
-{
-    // if it's already in the shape, no steps to take
-    if (BooleanFunction_Checker(current))
-        return 0.0;
-
-	// there are different values to reach based on where we are in the pattern.
-    float lower = step(0.5, current.x) * 0.5;
-    float upper = lower + 0.5;
-
-    // see how long to escape the box on each axis, take sooner event
-    float stepsX;
-    if (stepValue.x < 0.0)
-        stepsX = (current.x - lower) / -stepValue.x;
-    else
-        stepsX = (upper - current.x) / stepValue.x;
-
-    float stepsY;
-    if (stepValue.y < 0.0)
-        stepsY = (current.y - lower) / -stepValue.y;
-    else
-        stepsY = (upper - current.y) / stepValue.y;     
-    
-	return ceil(min(stepsX, stepsY));    
-}
-
-//============================================================
-bool BooleanFunction_Square (vec2 current)
-{
-    return (current.x < 0.25 || current.x > 0.75 || current.y < 0.25 || current.y > 0.75);
-}
-
-//============================================================
-float NumberStepsFunction_Square (vec2 current, vec2 stepValue)
-{
-    // if it's already in the shape, no steps to take
-    if (BooleanFunction_Square(current))
-        return 0.0;
-    
-    float stepsX;
-    if (stepValue.x < 0.0)
-        stepsX = (current.x - 0.25) / -stepValue.x;
-    else
-        stepsX = (0.75 - current.x) / stepValue.x;
-    
-    float stepsY;
-    if (stepValue.y < 0.0)
-        stepsY = (current.y - 0.25) / -stepValue.y;
-    else
-        stepsY = (0.75 - current.y) / stepValue.y;    
-    
-    return ceil(min(stepsX, stepsY));
-}
-
-//============================================================
-bool BooleanFunction_Circle (vec2 current)
-{
-    const float radius = 0.25;
-    const float radiusSq = radius * radius;
-    vec2 rel = current - vec2(0.5, 0.5);
-    return rel.x*rel.x + rel.y*rel.y > radiusSq;
-}
-
-//============================================================
 float NumberStepsFunction_Circle (vec2 current, vec2 stepValue)
 {
-    // if it's already in the shape, no steps to take
-    if (BooleanFunction_Circle(current))
+   
+    const float c_circleRadiusStep = 2.5;
+    const float c_circleWidth = 2.0;
+    const float c_circleHalfWidth = c_circleWidth * 0.5;
+   
+    // find out how far we are from the center of the circles
+	float currentDist = length(current);
+    
+    // find the distance of the circle more inward than where we are, and more outward.
+    float innerDistance = floor(currentDist / c_circleRadiusStep) * c_circleRadiusStep + c_circleHalfWidth;
+    float outerDistance = ceil(currentDist / c_circleRadiusStep) * c_circleRadiusStep - c_circleHalfWidth;
+    
+    if (currentDist < c_circleRadiusStep)
+        innerDistance = 0.0;
+    
+    // if we are already inside the shape, no steps need to be taken
+    if (currentDist < innerDistance || currentDist > outerDistance)
         return 0.0;
     
-    float steps = RayIntersectCircle(current, stepValue, vec3(0.5, 0.5, 0.25));
-    return ceil(steps);
+    // Test our ray against both inner and outer circles to see which we hit first.
+    // If the ray is going outwards (dot(current, stepValue) >= 0), we technically only need to test the outer circle.
+    // But, if the ray is going inwards, it could hit either.
+    // No harm in testing against both though.
+    float innerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, innerDistance));
+    float outerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, outerDistance));
+    
+   	// return the first valid intersection if there is one
+    if (innerSteps < 0.0 && outerSteps < 0.0)
+        return 0.0;
+    
+    if (innerSteps < 0.0)
+        return ceil(outerSteps);
+    
+    if (outerSteps < 0.0)
+        return ceil(innerSteps);
+    
+    return ceil(min(innerSteps, outerSteps));
 }
 
 //============================================================
-bool BooleanFunction_ThinSquare (vec2 current)
+void mainImage( vec4& fragColor, in vec2 fragCoord )
 {
-    return (current.x < 0.05 || current.x > 0.95 || current.y < 0.05 || current.y > 0.95);
-}
 
-//============================================================
-float NumberStepsFunction_ThinSquare (vec2 current, vec2 stepValue)
-{
-    // if it's already in the shape, no steps to take
-    if (BooleanFunction_ThinSquare(current))
-        return 0.0;
-    
-    float stepsX;
-    if (stepValue.x < 0.0)
-        stepsX = (current.x - 0.05) / -stepValue.x;
-    else
-        stepsX = (0.95 - current.x) / stepValue.x;
-    
-    float stepsY;
-    if (stepValue.y < 0.0)
-        stepsY = (current.y - 0.05) / -stepValue.y;
-    else
-        stepsY = (0.95 - current.y) / stepValue.y;    
-    
-    return ceil(min(stepsX, stepsY));
-}
-    
-//============================================================
-void mainImage( vec4& fragColor, vec2 fragCoord )
-{
-    
-    float mode = mod(iGlobalTime / 3.0f, 5.0f);
-    
-    #if SHOW_2d_SHAPE
-    {
-        vec2 percent = (fragCoord / iResolution.xy);
-        percent.x *= iResolution.x / iResolution.y;
-        if (percent.x < 0.2 && percent.y > 0.8)
-        {
-            percent.x *= 5.0;
-            percent.y = (percent.y - 0.8) * 5.0;
-            float color = 1.0;
-            if (abs(percent.x - 0.5) > 0.48 || abs(percent.y - 0.5) > 0.48)
-            {
-                fragColor = vec4(1.0, 0.5, 0.0, 1.0);
-                return;
-            }   
-            
-            if (mode < 1.0)
-            	color = float(BooleanFunction_L(percent));                        
-            else if (mode < 2.0)
-                color = float(BooleanFunction_Square(percent));               
-            else if (mode < 3.0)
-                color = float(BooleanFunction_Circle(percent));   
-            else if (mode < 4.0)
-                color = float(BooleanFunction_Checker(percent));                  
-            else if (mode < 5.0)
-                color = float(BooleanFunction_ThinSquare(percent));                  
-			fragColor = vec4(vec3(color), 1.0);
-            return;                              
-        }
-    }
-    #endif
-    
+	if (fragCoord.x == 205 && fragCoord.y == 135)
+	{
+		int ijkl = 0;
+		//fragColor = vec4(0.0, 0.0, 1.0, 1.0);
+		//return;
+	}
+
+	if (fragCoord.x == 205 && fragCoord.y == 121)
+	{
+		int ijkl = 0;
+		//fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+		//return;
+	}
+
+
     // set up the camera
     vec3 cameraPos;
     vec3 rayDir;
     {
         vec2 percent = (fragCoord / iResolution.xy) - vec2(0.5,0.5);  
 
-        vec3 offset = vec3(0.5, 0.5, iGlobalTime+0.01);
+        vec3 offset = vec3(iGlobalTime, 0.1,0.01);
 
         float angleX = 0.0;
         float angleY = 0.0;
@@ -318,8 +164,8 @@ void mainImage( vec4& fragColor, vec2 fragCoord )
         rayDir = normalize(rayTarget - cameraPos);
     }
 
-    // keep the camera in a unit cube
-	cameraPos = fract(cameraPos);   
+    // modulus camera z to simplify math, since it just repeats endlessly on z axis anyways
+	cameraPos.z = fract(cameraPos.z);   
     
     // If ray facing negative on z axis, just flip direction and invert where we are in the cube on the z axis.
     // Now we only have to deal with positive z directions.
@@ -328,36 +174,22 @@ void mainImage( vec4& fragColor, vec2 fragCoord )
         cameraPos.z = 1.0 - cameraPos.z;
     }
         
-    // calculate the 3d position of the next two plane intersections
+    // calculate the 3d position of the first ray hit, as a place to start our uv raytrace.
     float intersection1Distance = (1.0 - cameraPos.z) / rayDir.z;
-    float intersection2Distance = (2.0 - cameraPos.z) / rayDir.z;
-    vec3 intersection1 = fract(cameraPos + rayDir * intersection1Distance);
-    vec3 intersection2 = fract(cameraPos + rayDir * intersection2Distance);
+    vec3 intersection1 = (cameraPos + rayDir * intersection1Distance);
      
-    // Calculate how much the uv changes from intersection1 to intersection2.
-    // Convert it from [0,1] to [-0.5, 0.5].
+    // Calculate how much the uv changes when stepping along the z axis one unit.
     // We need to know this to know if the uvs are going positive or negative and by how much, on each axis.
-    vec2 uvStep = intersection2.xy - intersection1.xy;
-    uvStep = fract(uvStep + 0.5) - 0.5;
+    vec2 uvStep = rayDir.xy / rayDir.z;
           
     // calculate how many steps it takes to hit something on the X and Y axis and take whichever hits first.
-    float steps = 0.0;
-    if (mode < 1.0)
-    	steps = NumberStepsFunction_L(intersection1.xy, uvStep);
-    else if (mode < 2.0)
-        steps = NumberStepsFunction_Square(intersection1.xy, uvStep);
-    else if (mode < 3.0)
-        steps = NumberStepsFunction_Circle(intersection1.xy, uvStep);    
-    else if (mode < 4.0)
-        steps = NumberStepsFunction_Checker(intersection1.xy, uvStep);            
-    else if (mode < 5.0)
-        steps = NumberStepsFunction_ThinSquare(intersection1.xy, uvStep);        
+    float steps = NumberStepsFunction_Circle(intersection1.xy, uvStep);    
         
     // calculate how far it is to the intersection we found
     float dist = (1.0 - cameraPos.z) / rayDir.z + steps / rayDir.z;
     
     #if DARKEN_OVER_DISTANCE
-	float tint = clamp(1.0 - dist / 5.0, 0.0, 1.0);
+	float tint = clamp(1.0 - dist / 10.0, 0.0, 1.0);
     #else
     float tint = 1.0;
     #endif
@@ -368,6 +200,33 @@ void mainImage( vec4& fragColor, vec2 fragCoord )
     
     // sample the texture
 	//fragColor = vec4(texture2D(iChannel0, uv).rgb * tint, 1.0);    
-
-	fragColor = vec4(uv * tint, 0.0f, 1.0f);
+	fragColor = vec4(uv*tint, 0.0, 1.0);
 }
+
+/*
+
+TODO:
+
+* concentric circles
+
+* How thick does the circle need to be? ray could be moving up to 1.0 on each axis i think!
+ * it may actually be unbound?
+ * use the harness to find out maximum value in practice? may be based on resolution / aspect ratio ):
+
+* make the camera move around on x,y axis too?
+
+* maybe we can make the radius of the circles grow and shink over time
+ * per layer? dunno
+
+* is the darken over distance correct? maybe try non linear like distance fog?
+
+--------------------
+Note: maximum uv step is based on camera stuff.
+
+uvStep = rayDir.xy / rayDir.z
+
+! formalize how rayDir is created so you can explain maximum uv step size on an axis.
+
+
+
+*/

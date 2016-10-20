@@ -2,7 +2,7 @@
 #include "Settings.h"
 #include "SImageData.h"
 
-float iGlobalTime = 0.0f;
+float iGlobalTime = c_timeSeconds;
 vec3 iResolution(float(c_imageResolution[0]), float(c_imageResolution[1]), 1.0f);
 vec4 iMouse(0.0f);
 
