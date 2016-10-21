@@ -44,6 +44,11 @@ struct vec3
 		, y(_y)
 		, z(_z)
 	{ }
+    vec3(const vec2& v2, float _z)
+        : x(v2.x)
+        , y(v2.y)
+        , z(_z)
+    { }
 
 	float x, y, z;
 
@@ -68,6 +73,11 @@ struct vec3
 	__declspec(property(get = get_zx, put = put_zx)) vec2 zx;
 	inline vec2 get_zx() const { return{ z, x }; }
 	inline void put_zx(vec2 v) { this->z = v.x;  this->x = v.y; }
+
+    // yzx
+    __declspec(property(get = get_yzx, put = put_yzx)) vec3 yzx;
+    inline vec3 get_yzx() const { return{ y, z, x }; }
+    inline void put_yzx(vec3 v) { this->y = v.x;  this->z = v.y; this->x = v.z; }
 };
 
 struct vec4
@@ -202,6 +212,16 @@ T operator * (const T& A, float B)
 
 //-------------------------------------------------------------------------------------
 template<typename T>
+T operator += (T& A, float B)
+{
+    // Do the operation
+    for (size_t i = 0; i < T::c_numElements; ++i)
+        A[i] += B;
+    return A;
+}
+
+//-------------------------------------------------------------------------------------
+template<typename T>
 T operator *= (T& A, float B)
 {
 	// Do the operation
@@ -263,7 +283,7 @@ T fract(const T& A)
 }
 
 //-------------------------------------------------------------------------------------
-template<typename T>
+template <typename T>
 T mod (const T& A, float modulus)
 {
 	// Do the operation
@@ -314,6 +334,24 @@ inline vec3 cross (const vec3& a, const vec3& b)
 		a[2] * b[0] - a[0] * b[2],
 		a[0] * b[1] - a[1] * b[0]
 	);
+}
+
+//-------------------------------------------------------------------------------------
+template<typename T>
+T mix (const T& A, const T& B, float blend)
+{
+    T ret;
+    for (size_t i = 0; i < T::c_numElements; ++i)
+        ret[i] = A[i] * (1.0f - blend) + B[i] * blend;
+    return ret;
+}
+
+//-------------------------------------------------------------------------------------
+inline float smoothstep (float min, float max, float value)
+{
+    float t = (value - min) / (max - min);
+    t = clamp(t, 0.0f, 1.0f);
+    return 3.0*t*t - 2.0 * t*t*t;
 }
 
 //-------------------------------------------------------------------------------------

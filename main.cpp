@@ -19,6 +19,20 @@
 const float c_cameraDistance	= 6.0;
 const float c_cameraViewWidth	= 24.0;
 
+const float c_pi = 3.14159265359;
+const float c_twoPi = c_pi * 2.0;
+
+// Hash without sine from https://www.shadertoy.com/view/4djSRW
+#define HASHSCALE1 .1031
+//----------------------------------------------------------------------------------------
+//  1 out, 1 in...
+float hash11(float p)
+{
+	vec3 p3  = fract(vec3(p) * HASHSCALE1);
+    p3 += dot(p3, p3.yzx + 19.19);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 //============================================================
 float binarySign (float v)
 {
@@ -31,6 +45,10 @@ float binarySign (float v)
 // Adapted from "real time collision detection" IntersectRaySphere()
 float RayIntersectCircle (in vec2 rayPos, in vec2 rayDir, in vec3 circle)
 {
+    // rayDir isn't normalized, so normalize it but remember it's length
+    float rayLen = length(rayDir);
+    rayDir = normalize(rayDir);
+
 	vec2 m = rayPos - circle.xy;
 	float b = dot(m, rayDir);
 	float c = dot(m, m) - circle.z*circle.z;
@@ -49,14 +67,14 @@ float RayIntersectCircle (in vec2 rayPos, in vec2 rayDir, in vec3 circle)
 	if (t < 0.0)
 		t = -b + sqrt(discr);
 
-	return t;
+	return t / rayLen;
 }
 
 //============================================================
 float NumberStepsFunction_Circle (vec2 current, vec2 stepValue)
 {
    
-    const float c_circleRadiusStep = 2.5;
+    const float c_circleRadiusStep = 4.0; //3.0;
     const float c_circleWidth = 2.0;
     const float c_circleHalfWidth = c_circleWidth * 0.5;
    
@@ -67,19 +85,30 @@ float NumberStepsFunction_Circle (vec2 current, vec2 stepValue)
     float innerDistance = floor(currentDist / c_circleRadiusStep) * c_circleRadiusStep + c_circleHalfWidth;
     float outerDistance = ceil(currentDist / c_circleRadiusStep) * c_circleRadiusStep - c_circleHalfWidth;
     
+    // don't show the inner most circle, as we want something to look at!
     if (currentDist < c_circleRadiusStep)
-        innerDistance = 0.0;
+        innerDistance = 0.0;        
     
     // if we are already inside the shape, no steps need to be taken
     if (currentDist < innerDistance || currentDist > outerDistance)
         return 0.0;
     
+    // else, if our stepValue is nearly zero, it will take infinitely long, so return a large number
+    if (length(stepValue) < 0.00001)
+        return 1000000.0;
+        
     // Test our ray against both inner and outer circles to see which we hit first.
     // If the ray is going outwards (dot(current, stepValue) >= 0), we technically only need to test the outer circle.
     // But, if the ray is going inwards, it could hit either.
     // No harm in testing against both though.
-    float innerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, innerDistance));
     float outerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, outerDistance));
+    
+    // if we are pointing towards the inner most circle, ignore it, so we have something to look at
+	if (currentDist < c_circleRadiusStep)
+        return ceil(outerSteps);
+
+    // else find the number of steps to the inner circle
+    float innerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, innerDistance));    
     
    	// return the first valid intersection if there is one
     if (innerSteps < 0.0 && outerSteps < 0.0)
@@ -102,9 +131,18 @@ void mainImage( vec4& fragColor, in vec2 fragCoord )
     vec3 rayDir;
     {
         vec2 percent = (fragCoord / iResolution.xy) - vec2(0.5,0.5);  
-
-        vec3 offset = vec3(iGlobalTime, 0.1,0.01);
-
+        
+        // calculate where our camera should be, by smoothstep interpolating between points over distance
+        float envelope = min(1.0, iGlobalTime / 4.0);
+        float ztarget =  iGlobalTime;
+        float lastAngle = hash11(floor(ztarget / 8.0)) * c_twoPi;
+        float nextAngle = hash11(ceil(ztarget / 8.0)) * c_twoPi;
+        vec2 lastxytarget = vec2(cos(lastAngle), sin(lastAngle)) * 6.0;
+        vec2 nextxytarget = vec2(cos(nextAngle), sin(nextAngle)) * 6.0;
+        float blend = smoothstep(0.0f, 1.0f, fract(ztarget / 8.0f));
+        vec2 xytarget = mix(lastxytarget, nextxytarget, blend) * envelope;
+        vec3 offset = vec3(xytarget, ztarget);
+       
         float angleX = 0.0;
         float angleY = 0.0;
 
@@ -113,6 +151,11 @@ void mainImage( vec4& fragColor, in vec2 fragCoord )
             angleX = 3.14 + 6.28 * mouse.x;
             angleY = (mouse.y - 0.5) * 3.14;//(mouse.y * 3.90) - 0.4;
         }
+        
+        // TODO: temp!
+        offset = vec3(-6.5, 0.0, 0.01);  // flip between 0.99 and 0.01 to see where the holes should be!
+        angleX -= 5.25;
+        
 
         vec3 cameraFwd	= (vec3(sin(angleX)*cos(angleY), sin(angleY), cos(angleX)*cos(angleY)));           
         vec3 cameraRight = normalize(cross(vec3(0.0,1.0,0.0),cameraFwd));
@@ -133,6 +176,7 @@ void mainImage( vec4& fragColor, in vec2 fragCoord )
     // Now we only have to deal with positive z directions.
     if (rayDir.z < 0.0) {
         rayDir *= -1.0;
+        cameraPos.xy *= -1.0;
         cameraPos.z = 1.0 - cameraPos.z;
     }
         
@@ -151,7 +195,7 @@ void mainImage( vec4& fragColor, in vec2 fragCoord )
     float dist = (1.0 - cameraPos.z) / rayDir.z + steps / rayDir.z;
     
     #if DARKEN_OVER_DISTANCE
-	float tint = clamp(1.0 - dist / 10.0, 0.0, 1.0);
+	float tint = clamp(1.0 - dist / 15.0, 0.0, 1.0);
     #else
     float tint = 1.0;
     #endif
@@ -162,25 +206,42 @@ void mainImage( vec4& fragColor, in vec2 fragCoord )
     
     // sample the texture
 	//fragColor = vec4(texture2D(iChannel0, uv).rgb * tint, 1.0);    
-	fragColor = vec4(uv*tint, 0.0, 1.0);
+    fragColor = vec4(uv*tint, 0.0, 1.0);
 }
 
 /*
 
 TODO:
 
-* concentric circles
+! could do odd/even layer textures! would help see problems i guess.
+
+? make the camera rotate over time?
+
+! there's a bug with layers after the 2nd one not showing cutouts??
 
 * How thick does the circle need to be? ray could be moving up to 1.0 on each axis i think!
  * it may actually be unbound?
  * use the harness to find out maximum value in practice? may be based on resolution / aspect ratio ):
 
-* make the camera move around on x,y axis too?
+? does minimum thickness depend on viewing angle? if so that would suck.
+
+* make the camera move around on x,y axis too? maybe on sine wave or something
+ * make it be between distances by the time it hits each z integer? so just interpolate between z's.
 
 * maybe we can make the radius of the circles grow and shink over time
  * per layer? dunno
 
 * is the darken over distance correct? maybe try non linear like distance fog?
+
+! make a red/blue 3d version when done!
+
+* use this circle function in the other shader that you already made!
+ * could also fix the x,y thing on the other shader.  cameraPos.xy *= -1.0;
+ 
+--------------------
+Note: this is a fail case too unfortunately!
+
+intersecting against the inner circle has variable thickness, so can return false positive hits.
 
 --------------------
 Note: maximum uv step is based on camera stuff.
