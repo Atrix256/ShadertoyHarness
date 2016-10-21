@@ -28,50 +28,28 @@ float binarySign (float v)
 //============================================================
 // returns t
 // circle xy = position, z = radius
-// adapted from http://mathworld.wolfram.com/Circle-LineIntersection.html
-// Could be done more efficiently, but it works :P
+// Adapted from "real time collision detection" IntersectRaySphere()
 float RayIntersectCircle (in vec2 rayPos, in vec2 rayDir, in vec3 circle)
 {
-    rayPos -= circle.xy;
-    
-    float x1 = rayPos.x;
-    float y1 = rayPos.y;
-    float x2 = rayPos.x + rayDir.x;
-    float y2 = rayPos.y + rayDir.y;
-    
-    float dx = x2 - x1;
-    float dy = y2 - y1;
-    
-    float d_r = length(vec2(dx, dy));
-    
-    float D = x1*y2 - x2*y1;
-    
-    float discr = circle.z * circle.z * d_r * d_r - D * D;
-    
-    if (discr < 0.0)
-        return 2.0;
-    
-    float x = (D*dy - binarySign(dy)*dx*sqrt(discr)) / (d_r*d_r);
-    float y = (-D*dx - abs(dy)*sqrt(discr)) / (d_r*d_r);
-    
-    float t;
-    if (abs(rayDir.x) > 0.1)
-        t = (vec2(x,y) - rayPos).x / rayDir.x;
-    else
-        t = (vec2(x,y) - rayPos).y / rayDir.y;
-    
-    if (t < 0.0)
-    {
-        x = (D*dy + binarySign(dy)*dx*sqrt(discr)) / (d_r*d_r);
-        y = (-D*dx + abs(dy)*sqrt(discr)) / (d_r*d_r);
+	vec2 m = rayPos - circle.xy;
+	float b = dot(m, rayDir);
+	float c = dot(m, m) - circle.z*circle.z;
+	
+	// Exit if the ray is outside the circle and pointing away from the circle
+	if (c > 0.0 && b > 0.0)
+		return -1.0;
 
-        if (abs(rayDir.x) > 0.1)
-            t = (vec2(x,y) - rayPos).x / rayDir.x;
-        else
-            t = (vec2(x,y) - rayPos).y / rayDir.y;        
-    }
-    
-    return t;
+	float discr = b*b - c;
+
+	// A negative discriminant means it missed the sphere
+	if (discr < 0.0)
+		return -1.0;
+
+	float t = -b - sqrt(discr);
+	if (t < 0.0)
+		t = -b + sqrt(discr);
+
+	return t;
 }
 
 //============================================================
@@ -119,22 +97,6 @@ float NumberStepsFunction_Circle (vec2 current, vec2 stepValue)
 //============================================================
 void mainImage( vec4& fragColor, in vec2 fragCoord )
 {
-
-	if (fragCoord.x == 205 && fragCoord.y == 135)
-	{
-		int ijkl = 0;
-		//fragColor = vec4(0.0, 0.0, 1.0, 1.0);
-		//return;
-	}
-
-	if (fragCoord.x == 205 && fragCoord.y == 121)
-	{
-		int ijkl = 0;
-		//fragColor = vec4(0.0, 1.0, 0.0, 1.0);
-		//return;
-	}
-
-
     // set up the camera
     vec3 cameraPos;
     vec3 rayDir;
