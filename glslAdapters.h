@@ -119,9 +119,21 @@ struct vec4
 	inline void put_xy(vec2 v) { this->x = v.x;  this->y = v.y; }
 };
 
+
 //-------------------------------------------------------------------------------------
 // Vec vs Vec operations
 //-------------------------------------------------------------------------------------
+
+template<typename T>
+T operator - (const T& A)
+{
+	// Unary minus
+	T ret;
+	for (size_t i = 0; i < T::c_numElements; ++i)
+		ret[i] = -A[i];
+	return ret;
+}
+
 template<typename T>
 T operator + (const T& A, const T& B)
 {
@@ -294,6 +306,20 @@ T mod (const T& A, float modulus)
 }
 
 //-------------------------------------------------------------------------------------
+template <>
+inline float mod<float>(const float& A, float modulus)
+{
+	return fmodf(A, modulus);
+}
+
+//-------------------------------------------------------------------------------------
+template <>
+inline double mod<double>(const double& A, float modulus)
+{
+	return fmodf(A, modulus);
+}
+
+//-------------------------------------------------------------------------------------
 inline float clamp(float value, float min, float max)
 {
 	if (value < min)
@@ -344,6 +370,16 @@ T mix (const T& A, const T& B, float blend)
     for (size_t i = 0; i < T::c_numElements; ++i)
         ret[i] = A[i] * (1.0f - blend) + B[i] * blend;
     return ret;
+}
+
+//-------------------------------------------------------------------------------------
+template<typename T>
+T pow(const T& A, float p)
+{
+	T ret;
+	for (size_t i = 0; i < T::c_numElements; ++i)
+		ret[i] = pow(A[i], p);
+	return ret;
 }
 
 //-------------------------------------------------------------------------------------

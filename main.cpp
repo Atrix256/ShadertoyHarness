@@ -5,16 +5,15 @@
     By Alan Wolfe
     http://blog.demofox.org
 
-	Analytical solve for ray vs infinite layers of infinite concentric circles.
+	Analytical solve for ray vs infinite pillars of shapes defined by support vectors.
 
-	Continuation of:
-    https://www.shadertoy.com/view/MlK3zt
-    and sebbi's:
-    https://www.shadertoy.com/view/lly3Rc
-
+	Based on an idea sebbi shared on twitter (https://twitter.com/SebAaltonen) for O(1)
+	constant time ray vs infinite grid of pillars intersection.
 */
 
-#define DARKEN_OVER_DISTANCE 1  // This makes it easier to see the different layers in a static image, not to hide a max distance.
+#define SHOW_2D_SHAPE        1  // This makes the 2d shape be shown in upper left corner
+
+const float c_pillarHeight = 2.0;
 
 const float c_cameraDistance	= 6.0;
 const float c_cameraViewWidth	= 24.0;
@@ -22,128 +21,97 @@ const float c_cameraViewWidth	= 24.0;
 const float c_pi = 3.14159265359;
 const float c_twoPi = c_pi * 2.0;
 
-// Hash without sine from https://www.shadertoy.com/view/4djSRW
-#define HASHSCALE1 .1031
-//----------------------------------------------------------------------------------------
-//  1 out, 1 in...
-float hash11(float p)
+//============================================================
+float SupportVector_Circle (vec2 normalizedDir, float timePercent)
 {
-	vec3 p3  = fract(vec3(p) * HASHSCALE1);
-    p3 += dot(p3, p3.yzx + 19.19);
-    return fract((p3.x + p3.y) * p3.z);
+    return 0.3 + sin(timePercent*2.0*c_twoPi) * 0.1;
 }
 
 //============================================================
-float binarySign (float v)
+float IntersectPillarsSilhouette(vec2 pos, vec2 dir, float mode)
 {
-    return step(0.0, v) * 2.0 - 1.0;
-}
+	//DAMNIT - need to diff this vs the shadertoy to make sure and get all changes
 
-//============================================================
-// returns t
-// circle xy = position, z = radius
-// Adapted from "real time collision detection" IntersectRaySphere()
-float RayIntersectCircle (in vec2 rayPos, in vec2 rayDir, in vec3 circle)
-{
-    // rayDir isn't normalized, so normalize it but remember it's length
-    float rayLen = length(rayDir);
-    rayDir = normalize(rayDir);
+    // get a perpendicular 2d vector by swapping x and y, and negating one.
+    vec2 dirRight = normalize(vec2(dir.y, -dir.x));
+    
+    // TODO: handle other shapes, depending on the mode
+    float leftDist = -SupportVector_Circle(-dirRight, fract(mode));
+    float rightDist = SupportVector_Circle(dirRight, fract(mode));
+    
+	// TODO: does this need to be between -0.5 and +0.5?
+    float currentDist = dot(dirRight, pos);
+	currentDist = fract(currentDist);
+	currentDist = fract(currentDist + 0.5) - 0.5;
 
-	vec2 m = rayPos - circle.xy;
-	float b = dot(m, rayDir);
-	float c = dot(m, m) - circle.z*circle.z;
-	
-	// Exit if the ray is outside the circle and pointing away from the circle
-	if (c > 0.0 && b > 0.0)
-		return -1.0;
+	// if we are already in the silhouette, we are done
+	if (currentDist >= leftDist && currentDist <= rightDist)
+		return 0.0;
 
-	float discr = b*b - c;
+	// else if 
 
-	// A negative discriminant means it missed the sphere
-	if (discr < 0.0)
-		return -1.0;
+	// TODO: find out how long til the ray  is in the silhouette of the object
+	// TODO: THEN not done yet.  Still need to find actual intersection distance. May not be easy / possible with all support vector shapes.
 
-	float t = -b - sqrt(discr);
-	if (t < 0.0)
-		t = -b + sqrt(discr);
-
-	return t / rayLen;
-}
-
-//============================================================
-float NumberStepsFunction_Circle (vec2 current, vec2 stepValue)
-{
-   
-    const float c_circleRadiusStep = 4.0; //3.0;
-    const float c_circleWidth = 2.0;
-    const float c_circleHalfWidth = c_circleWidth * 0.5;
-   
-    // find out how far we are from the center of the circles
-	float currentDist = length(current);
+	if (currentDist != 0.0)
+	{
+		int ijkl = 0;
+	}
     
-    // find the distance of the circle more inward than where we are, and more outward.
-    float innerDistance = floor(currentDist / c_circleRadiusStep) * c_circleRadiusStep + c_circleHalfWidth;
-    float outerDistance = ceil(currentDist / c_circleRadiusStep) * c_circleRadiusStep - c_circleHalfWidth;
-    
-    // don't show the inner most circle, as we want something to look at!
-    if (currentDist < c_circleRadiusStep)
-        innerDistance = 0.0;        
-    
-    // if we are already inside the shape, no steps need to be taken
-    if (currentDist < innerDistance || currentDist > outerDistance)
-        return 0.0;
-    
-    // else, if our stepValue is nearly zero, it will take infinitely long, so return a large number
-    if (length(stepValue) < 0.00001)
-        return 1000000.0;
-        
-    // Test our ray against both inner and outer circles to see which we hit first.
-    // If the ray is going outwards (dot(current, stepValue) >= 0), we technically only need to test the outer circle.
-    // But, if the ray is going inwards, it could hit either.
-    // No harm in testing against both though.
-    float outerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, outerDistance));
-    
-    // if we are pointing towards the inner most circle, ignore it, so we have something to look at
-	if (currentDist < c_circleRadiusStep)
-        return ceil(outerSteps);
-
-    // else find the number of steps to the inner circle
-    float innerSteps = RayIntersectCircle(current, stepValue, vec3(0.0, 0.0, innerDistance));    
-    
-   	// return the first valid intersection if there is one
-    if (innerSteps < 0.0 && outerSteps < 0.0)
-        return 0.0;
-    
-    if (innerSteps < 0.0)
-        return ceil(outerSteps);
-    
-    if (outerSteps < 0.0)
-        return ceil(innerSteps);
-    
-    return ceil(min(innerSteps, outerSteps));
+    return 0.0;
 }
 
 //============================================================
 void mainImage( vec4& fragColor, in vec2 fragCoord )
 {
+    float mode = mod(iGlobalTime / 3.0f, 5.0f);
+    
+    #if SHOW_2D_SHAPE
+    {
+        vec2 percent = (fragCoord / iResolution.xy);
+        percent.x *= iResolution.x / iResolution.y;
+        if (percent.x < 0.2 && percent.y > 0.8)
+        {
+            percent.x *= 5.0;
+            percent.y = (percent.y - 0.8) * 5.0;
+            float color = 1.0;
+            if (abs(percent.x - 0.5) > 0.48 || abs(percent.y - 0.5) > 0.48)
+            {
+                fragColor = vec4(1.0, 0.5, 0.0, 1.0);
+                return;
+            }   
+            
+            float dist = length(percent - 0.5);
+            vec2 dir = normalize(percent - 0.5);
+            
+            // TODO: handle other shapes, depending on the mode
+            color = SupportVector_Circle(dir, fract(mode)) < dist ? 0.0 : 1.0;
+            
+            /*
+            if (mode < 1.0)
+            	color = float(BooleanFunction_L(percent));                        
+            else if (mode < 2.0)
+                color = float(BooleanFunction_Square(percent));               
+            else if (mode < 3.0)
+                color = float(BooleanFunction_Circle(percent));   
+            else if (mode < 4.0)
+                color = float(BooleanFunction_Checker(percent));                  
+            else if (mode < 5.0)
+                color = float(BooleanFunction_ThinSquare(percent));   
+			*/
+			fragColor = vec4(vec3(color), 1.0);
+            return;                              
+        }
+    }
+    #endif
+    
     // set up the camera
     vec3 cameraPos;
     vec3 rayDir;
     {
         vec2 percent = (fragCoord / iResolution.xy) - vec2(0.5,0.5);  
-        
-        // calculate where our camera should be, by smoothstep interpolating between points over distance
-        float envelope = min(1.0, iGlobalTime / 4.0);
-        float ztarget =  iGlobalTime;
-        float lastAngle = hash11(floor(ztarget / 8.0)) * c_twoPi;
-        float nextAngle = hash11(ceil(ztarget / 8.0)) * c_twoPi;
-        vec2 lastxytarget = vec2(cos(lastAngle), sin(lastAngle)) * 6.0;
-        vec2 nextxytarget = vec2(cos(nextAngle), sin(nextAngle)) * 6.0;
-        float blend = smoothstep(0.0f, 1.0f, fract(ztarget / 8.0f));
-        vec2 xytarget = mix(lastxytarget, nextxytarget, blend) * envelope;
-        vec3 offset = vec3(xytarget, ztarget);
-       
-        float angleX = 0.0;
+
+        float angleX = c_pi;
         float angleY = 0.0;
 
         if (iMouse.z > 0.0) {
@@ -151,105 +119,97 @@ void mainImage( vec4& fragColor, in vec2 fragCoord )
             angleX = 3.14 + 6.28 * mouse.x;
             angleY = (mouse.y - 0.5) * 3.14;//(mouse.y * 3.90) - 0.4;
         }
-        
-        // TODO: temp!
-        offset = vec3(-6.5, 0.0, 0.01);  // flip between 0.99 and 0.01 to see where the holes should be!
-        angleX -= 5.25;
-        
 
         vec3 cameraFwd	= (vec3(sin(angleX)*cos(angleY), sin(angleY), cos(angleX)*cos(angleY)));           
-        vec3 cameraRight = normalize(cross(vec3(0.0,1.0,0.0),cameraFwd));
-        vec3 cameraUp = normalize(cross(cameraFwd, cameraRight));
+        vec3 cameraRight = normalize(cross(cameraFwd, vec3(0.0, 1.0, 0.0)));
+        vec3 cameraUp = normalize(cross(cameraRight, cameraFwd));
 
-        cameraPos = vec3(0.0, 0.0, -1.0) + offset;
-        vec3 cameraTarget = vec3(0.0, 0.0, 0.0) + offset;
+        cameraPos = vec3(0.0, 0.0, 6.0 - iGlobalTime);
 
         float cameraViewHeight	= c_cameraViewWidth * iResolution.y / iResolution.x;
         vec3 rayTarget = cameraPos +  cameraFwd * c_cameraDistance + cameraRight * c_cameraViewWidth * percent.x + cameraUp * cameraViewHeight * percent.y;
         rayDir = normalize(rayTarget - cameraPos);
-    }
+    }    
+    
+    // Find how long it takes the ray to hit the top plane. aka for camera z to hit c_pillarHeight
+    // TODO: handle looking in the wrong direction
+    float topHitDist = (c_pillarHeight - cameraPos.z) / rayDir.z;
+    vec3 topHit = cameraPos + rayDir * topHitDist;
+    
+    // Find how long it takes the ray to hit the floor. aka for camera z to hit 0.0
+    // TODO: handle looking in the wrong direction
+    float bottomHitDist = -cameraPos.z / rayDir.z;
+    vec3 bottomHit = cameraPos + rayDir * bottomHitDist;
+    
+    // Calculate the uv space ray.
+    // Convert it from [0,1] to [-0.5, 0.5].
+    // TODO: this will fall apart when we are between the planes! In that case we need to start at the camera position, instead of top hit.
+    float topHitDist2 = ((c_pillarHeight - 1.0) - cameraPos.z) / rayDir.z;  
+    vec3 topHit2 = cameraPos + rayDir * topHitDist2;
+    vec2 uvRay = topHit2.xy - topHit.xy;
+    uvRay = fract(uvRay + 0.5) - 0.5;
 
-    // modulus camera z to simplify math, since it just repeats endlessly on z axis anyways
-	cameraPos.z = fract(cameraPos.z);   
+    // calculate how long it takes for the ray to hit the pillars
+    // TODO: this will fall apart when we are between the planes. Should be +0 in that case, instead of +topHitDist!
+    float dist = IntersectPillarsSilhouette(topHit.xy, uvRay, mode) + topHitDist;
     
-    // If ray facing negative on z axis, just flip direction and invert where we are in the cube on the z axis.
-    // Now we only have to deal with positive z directions.
-    if (rayDir.z < 0.0) {
-        rayDir *= -1.0;
-        cameraPos.xy *= -1.0;
-        cameraPos.z = 1.0 - cameraPos.z;
-    }
-        
-    // calculate the 3d position of the first ray hit, as a place to start our uv raytrace.
-    float intersection1Distance = (1.0 - cameraPos.z) / rayDir.z;
-    vec3 intersection1 = (cameraPos + rayDir * intersection1Distance);
-     
-    // Calculate how much the uv changes when stepping along the z axis one unit.
-    // We need to know this to know if the uvs are going positive or negative and by how much, on each axis.
-    vec2 uvStep = rayDir.xy / rayDir.z;
-          
-    // calculate how many steps it takes to hit something on the X and Y axis and take whichever hits first.
-    float steps = NumberStepsFunction_Circle(intersection1.xy, uvStep);    
-        
-    // calculate how far it is to the intersection we found
-    float dist = (1.0 - cameraPos.z) / rayDir.z + steps / rayDir.z;
     
-    #if DARKEN_OVER_DISTANCE
-	float tint = clamp(1.0 - dist / 15.0, 0.0, 1.0);
-    #else
-    float tint = 1.0;
-    #endif
+	// TODO: temp
+    float canSeeTop = step(0.0, topHitDist);
+    float canSeeBottom = step(0.0, bottomHitDist);
+    vec3 pixelColor = vec3(topHit.xy, 0.0) * canSeeTop;   
+    pixelColor = pixelColor * (1.0 - canSeeBottom) + mix(pixelColor, vec3(bottomHit.xy, 0.0), 0.5) * canSeeBottom;
     
-    // calculate the hit point
-    vec3 hitPoint = cameraPos + rayDir * dist;
-    vec2 uv = hitPoint.xy;
-    
-    // sample the texture
-	//fragColor = vec4(texture2D(iChannel0, uv).rgb * tint, 1.0);    
-    fragColor = vec4(uv*tint, 0.0, 1.0);
+    // output final gamma corrected color
+	fragColor = vec4(pow(pixelColor, 1.0/2.2),1.0);
 }
 
 /*
 
 TODO:
 
-! could do odd/even layer textures! would help see problems i guess.
+? do support vector shapes need to have direction normalized?
 
-? make the camera rotate over time?
+! could do reflections and shadows i think! Maybe refraction too.  All fixed costs.
 
-! there's a bug with layers after the 2nd one not showing cutouts??
+* make camera look work
 
-* How thick does the circle need to be? ray could be moving up to 1.0 on each axis i think!
- * it may actually be unbound?
- * use the harness to find out maximum value in practice? may be based on resolution / aspect ratio ):
+* we could animate the height of the pillars
 
-? does minimum thickness depend on viewing angle? if so that would suck.
+* finish the todo's
 
-* make the camera move around on x,y axis too? maybe on sine wave or something
- * make it be between distances by the time it hits each z integer? so just interpolate between z's.
+* make a red/blue version
 
-* maybe we can make the radius of the circles grow and shink over time
- * per layer? dunno
+? can you offset the pillars every other row?
 
-* is the darken over distance correct? maybe try non linear like distance fog?
+----- ORIGINAL PLAN -----
 
-! make a red/blue 3d version when done!
+* ray vs infinite field of pillars, constrained between two planes.
+* 1st plane (looking down from top) is the top of the pillars
+* 2nd plane is the ground. texture the ground.
 
-* use this circle function in the other shader that you already made!
- * could also fix the x,y thing on the other shader.  cameraPos.xy *= -1.0;
- 
---------------------
-Note: this is a fail case too unfortunately!
+* three stages:
+	1) looking down from sky for a second or two
+	2) go down to the surface
+    3) run through pillars
 
-intersecting against the inner circle has variable thickness, so can return false positive hits.
+* Do several pillars, defined by support vector shapes
+ * animate size over time?
 
---------------------
-Note: maximum uv step is based on camera stuff.
+* could try lerping between intersections of two shapes to morph from one shape to the next
+ * seems like it could be problematic when the intersection is from two different "steps", but try it out.
 
-uvStep = rayDir.xy / rayDir.z
+* support vectors work because you just need to find width of shape when viewed from raydir.
+ * IE you find max distance on +/- relative x axis.
+ ! they don't work for final intersection though. you still need a ray vs shape function too.
 
-! formalize how rayDir is created so you can explain maximum uv step size on an axis.
+* show shape of pillar in upper left, like you do with the other shader (https://www.shadertoy.com/view/MlK3zt)
 
+* show george when done?
+ * not sure how he did his, might also be worth looking into.
 
+ ----- NOTES -----
+
+ * could animate position over time of the grid, but far easier to animate camera for same effect so no need.
 
 */
